@@ -1,7 +1,9 @@
-FROM public.ecr.aws/lambda/python:3.11
+FROM public.ecr.aws/lambda/python:3.10
 
-WORKDIR /app
 
-COPY . .
+COPY app.py ${LAMBDA_TASK_ROOT}
+COPY ./requirements.txt ${LAMBDA_TASK_ROOT}
+COPY ./webhook_consumer.py ${LAMBDA_TASK_ROOT}
 
-CMD ["webhook_sdk.app.lambda_handler"]
+
+CMD ["app.lambda_handler"]

@@ -10,12 +10,11 @@ class WebhookConsumer:
         self.payload = payload or {}
 
 
-    def print_data(self, data: dict):
+    def print_data(self):
         """
         Print the webhook data.
 
         Args:
             data (dict): The data received from the webhook.
         """
-        print(f"Webhook data for appointment {self.appointment_id}:")
-        print(data)
+        print(f"Webhook data for appointment {self.payload}:")
