@@ -8,10 +8,10 @@ def submit(event):
         body = json.loads(unescaped_json)
 
         webhook_consumer = WebhookConsumer(body)
-        webhook_consumer.print_data()
+        webhook_data = webhook_consumer.get_data()
         return {
             'statusCode': 200,
-            'body': json.dumps({'success': True})
+            'body': json.dumps(webhook_data)
         }
     except Exception as e:
         print("Exception handling webhook data:", e)
@@ -28,6 +28,7 @@ def lambda_handler(event, context):
     print(f"method : {method}")
     print(f"event : {event}")
 
+    # TODO: Add better Route handling; flask ?
     if method == 'POST' and path == '/webhook':
         return submit(event)
     else:
