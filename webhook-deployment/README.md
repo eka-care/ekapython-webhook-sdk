@@ -15,7 +15,7 @@
    ```bash
    aws configure
    ```
-
+   or export your AWS credentials if you are using IAM Identity Center
 2. **Download and Extract the Project**
 
    ```bash
@@ -25,7 +25,11 @@
 
 3. **Configure Environment Variables**
 
-   Edit the `config.env` file with the necessary configuration values.
+   Edit the `config.env` file with the necessary configuration values. For more detailed configuration setup, refer to [detailed.md](./detailed.md).
+
+   ```bash
+   vim config.env
+   ```
 
 4. **Make the Deployment Script Executable**
 
@@ -46,7 +50,3 @@
   ```bash
   ./deploy.sh delete
   ```
-
-## More Info
-
-For more detailed configuration setup, refer to [detailed.md](./detailed.md).

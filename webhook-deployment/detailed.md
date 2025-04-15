@@ -16,7 +16,7 @@ This documentation covers all configuration options used in the Eka webhook depl
 
 | Parameter | Description | Service |
 |-----------|-------------|---------|
-| `DOCKER_IMAGE_VERSION` | Version tag of the Docker image to pull from DockerHub | Docker, ECR |
+| `DOCKER_IMAGE_VERSION` | Version tag of the Docker image to pull from DockerHub | Docker, ECR | You can get the latest version at https://github.com/eka-care/ekapython-webhook-sdk/releases
 | `AWS_ACCOUNT_ID` | AWS account ID for constructing ECR repository URL | ECR |
 | `ECR_REPO_NAME` | Name of the ECR repository to store Lambda container image | ECR |
 
