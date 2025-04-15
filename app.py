@@ -42,9 +42,14 @@ def lambda_handler(event, context):
                         'body': reason
                     }
             webhook_data = webhook_consumer.get_data(client_id, client_secret, api_key)
+            if webhook_data.get('error'):
+                return {
+                    'statusCode': 403,
+                    'body': webhook_data.get('error')
+                }
             return {
                 'statusCode': 200,
-                'body': json.dumps(webhook_data)
+                'body': webhook_data.get('data')
             }
         else:
             return {
@@ -54,6 +59,6 @@ def lambda_handler(event, context):
     except Exception as e:
         print("Exception handling webhook data:", e)
         return {
-            'statusCode': 500,
-            'body': 'Internal Error'
+            'statusCode': 403,
+            'body': 'Unhandled Exception'
         }

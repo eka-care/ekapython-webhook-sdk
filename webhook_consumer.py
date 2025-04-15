@@ -72,8 +72,7 @@ class WebhookConsumer:
 
         return True, None
 
-    def get_data(self, client_id: str, client_secret: str, api_key: str) -> dict[str, str] | dict[str, str] | dict[
-        str, str] | dict[str, str] | str | dict[str, str]:
+    def get_data(self, client_id: str, client_secret: str, api_key: str) -> dict[str, Any]:
         """
         Print the webhook data.
 
@@ -124,7 +123,7 @@ class WebhookConsumer:
                 appointment_id), "patient_details": client.patient.get_patient(patient_id),
                               "clinic_details": client.clinic_doctor.get_clinic_details(clinic_id),
                               "doctor_details": client.clinic_doctor.get_doctor_details(doctor_id)}
-            return json.dumps(return_payload)
+            return {"error": "", "data": json.dumps(return_payload)}
 
         else:
             return {"error": "payload not supported, allowed payloads are " + str(ALLOWED_PAYLOADS)}
