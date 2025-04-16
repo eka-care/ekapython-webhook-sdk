@@ -10,13 +10,14 @@ export AWS_PAGER=""
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 [deploy|upgrade|delete|register-webhook]"
+    echo "Usage: $0 [deploy|upgrade|delete|register-webhook] [--version VERSION]"
     echo "Deploy, upgrade, delete CloudFormation stack, or register webhook for the Eka webhook"
     echo ""
     echo "  deploy                    Deploy the CloudFormation stack (default)"
     echo "  upgrade                   Update only the Lambda function with a new Docker image"
     echo "  delete                    Delete the CloudFormation stack"
     echo "  register-webhook          Register the webhook with Eka API (without deployment)"
+    echo "  --version VERSION         Specify Docker image version"
     echo "  -h, --help                Display this help message"
     echo ""
 }
@@ -50,6 +51,31 @@ if [[ $# -gt 0 ]]; then
     fi
 fi
 
+# Process additional command line arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                echo "Error: --version requires a value"
+                usage
+                exit 1
+            fi
+            CMD_DOCKER_IMAGE_VERSION="$2"
+            echo "Using Docker image version from command line: $CMD_DOCKER_IMAGE_VERSION"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown option '$1'"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
 # Load environment variables from config file
 if [ -f "$CONFIG_FILE" ]; then
     echo "Loading configuration from $CONFIG_FILE..."
@@ -61,10 +87,20 @@ else
     echo "STACK_NAME=eka-webhook-stack"
     echo "TEMPLATE_FILE=eka-webhook-cf-template.yaml"
     echo "REGION=ap-south-1"
-    echo "DOCKER_IMAGE_VERSION=0.0.1"
     echo "STAGE_NAME=prod"
     echo "EXTERNAL_URL=https://eka-webhook.example.com"
     echo "CERTIFICATE_ARN=arn:aws:acm:ap-south-1:123456789012:certificate/abcd1234-5678-90ef-ghij-klmnopqrstuv"
+    exit 1
+fi
+
+# Use command line version if provided, otherwise use config file version
+if [[ -n "$CMD_DOCKER_IMAGE_VERSION" ]]; then
+    DOCKER_IMAGE_VERSION="$CMD_DOCKER_IMAGE_VERSION"
+fi
+
+# Check if Docker image version is set for actions that require it
+if [[ "$ACTION" == "deploy" || "$ACTION" == "upgrade" ]] && [[ -z "$DOCKER_IMAGE_VERSION" ]]; then
+    echo "Error: DOCKER_IMAGE_VERSION must be specified  via --version parameter"
     exit 1
 fi
 
@@ -126,10 +162,10 @@ setup_ecr_and_deploy_image() {
         echo "ECR repository ${ECR_REPO_NAME} already exists."
     fi
     
-    # Pull the Webhook Lambda Image from Docker Hub repo
-    echo "Pulling Docker image ekacare/ekapython-webhook-sdk:$DOCKER_IMAGE_VERSION..."
-    docker pull ekacare/ekapython-webhook-sdk:$DOCKER_IMAGE_VERSION || {
-        echo "Error: Failed to pull Docker image. Exiting."
+    # Build the Docker image from local code
+    echo "Building Docker image with version tag $DOCKER_IMAGE_VERSION..."
+    docker build -t ekapython-webhook-sdk:$DOCKER_IMAGE_VERSION . || {
+        echo "Error: Failed to build Docker image. Exiting."
         # Clean up ECR repository if we created it in this run
         if $ECR_REPO_CREATED; then
             echo "Cleaning up newly created ECR repository ${ECR_REPO_NAME}..."
@@ -140,7 +176,7 @@ setup_ecr_and_deploy_image() {
     
     # Tag and push the image to ECR
     echo "Tagging and pushing to ECR: $ECR_REPO_URL"
-    docker tag ekacare/ekapython-webhook-sdk:$DOCKER_IMAGE_VERSION $ECR_REPO_URL || {
+    docker tag ekapython-webhook-sdk:$DOCKER_IMAGE_VERSION $ECR_REPO_URL || {
         echo "Error: Failed to tag Docker image. Exiting."
         # Clean up ECR repository if we created it in this run
         if $ECR_REPO_CREATED; then
@@ -400,7 +436,7 @@ upgrade_lambda() {
     
     # Validate Docker image version is provided
     if [ -z "$DOCKER_IMAGE_VERSION" ]; then
-        echo "Error: DOCKER_IMAGE_VERSION must be set in config.env"
+        echo "Error: DOCKER_IMAGE_VERSION must be specified via --version parameter or in config.env"
         exit 1
     fi
     
@@ -409,54 +445,8 @@ upgrade_lambda() {
     # Set up ECR and deploy the new image
     setup_ecr_and_deploy_image
     
-    # Get current stack parameters
-    echo "Retrieving current stack parameters..."
-    CURRENT_PARAMS=$(aws cloudformation describe-stacks \
-        --stack-name $STACK_NAME \
-        --region $REGION \
-        --query "Stacks[0].Parameters" \
-        --output json \
-        --no-cli-pager)
-    
-    if [[ -z "$CURRENT_PARAMS" || "$CURRENT_PARAMS" == "null" ]]; then
-        echo "Error: Could not retrieve current stack parameters."
-        exit 1
-    fi
-    
-    # Generate parameters file for update
-    echo "Generating parameters for stack update..."
-    PARAMS_FILE="parameters-upgrade.json"
-    
-    # Extract current parameter values and update only the DockerImage parameter
-    echo "[" > $PARAMS_FILE
-    echo "$CURRENT_PARAMS" | jq -c '.[]' | while read -r param; do
-        PARAM_KEY=$(echo $param | jq -r '.ParameterKey')
-        PARAM_VALUE=$(echo $param | jq -r '.ParameterValue')
-        
-        if [[ "$PARAM_KEY" == "DockerImage" ]]; then
-            # Update the Docker image parameter
-            echo "  {" >> $PARAMS_FILE
-            echo "    \"ParameterKey\": \"$PARAM_KEY\"," >> $PARAMS_FILE
-            echo "    \"ParameterValue\": \"$ECR_REPO_URL\"" >> $PARAMS_FILE
-            echo "  }," >> $PARAMS_FILE
-        elif [[ "$PARAM_KEY" == "LambdaArchitecture" ]]; then
-            # Update Lambda architecture with the detected or specified value
-            echo "  {" >> $PARAMS_FILE
-            echo "    \"ParameterKey\": \"$PARAM_KEY\"," >> $PARAMS_FILE
-            echo "    \"ParameterValue\": \"$LAMBDA_ARCHITECTURE\"" >> $PARAMS_FILE
-            echo "  }," >> $PARAMS_FILE
-        else
-            # Keep other parameters unchanged
-            echo "  {" >> $PARAMS_FILE
-            echo "    \"ParameterKey\": \"$PARAM_KEY\"," >> $PARAMS_FILE
-            echo "    \"ParameterValue\": \"$PARAM_VALUE\"" >> $PARAMS_FILE
-            echo "  }," >> $PARAMS_FILE
-        fi
-    done
-    
-    # Remove trailing comma from the last entry and close JSON array
-    sed -i '' -e '$ s/,$//' $PARAMS_FILE
-    echo "]" >> $PARAMS_FILE
+    # Generate parameters file from config.env, just like in deploy_stack
+    generate_parameters
     
     # Update the CloudFormation stack with the new parameters
     echo "Updating stack '$STACK_NAME' with new Docker image..."
@@ -585,3 +575,4 @@ case $ACTION in
         exit 1
         ;;
 esac
+

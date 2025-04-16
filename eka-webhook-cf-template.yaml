@@ -154,18 +154,31 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
-  APIGatewayRootResource:
+
+  ProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGateway
+      ResourceId: !GetAtt APIGateway.RootResourceId
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebhookLambda.Arn}/invocations
+
+  ProxyResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref APIGateway
       ParentId: !GetAtt APIGateway.RootResourceId
-      PathPart: '{proxy+}'
+      PathPart: "{proxy+}"
 
-  APIGatewayMethod:
+  ProxyResourceMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref APIGateway
-      ResourceId: !Ref APIGatewayRootResource
+      ResourceId: !Ref ProxyResource
       HttpMethod: ANY
       AuthorizationType: NONE
       RequestParameters:
@@ -180,7 +193,8 @@ Resources:
   APIGatewayDeployment: 
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-      - APIGatewayMethod    
+      - ProxyMethod
+      - ProxyResourceMethod
     Properties:
       RestApiId: !Ref APIGateway
       StageName: !Ref StageName
@@ -231,7 +245,7 @@ Outputs:
     Value: !GetAtt WebhookLambda.Arn
   APIGatewayURL:
     Description: "API Gateway URL"
-    Value: !Sub https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/webhook
+    Value: !Sub https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
   CustomDomainURL:
     Description: "Custom Domain URL"
     Value: !Sub https://${!Select [2, !Split ["/", !Ref ExternalUrl]]}

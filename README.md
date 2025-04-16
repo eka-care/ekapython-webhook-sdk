@@ -51,6 +51,7 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 
 # Api Key (Optional, Required when you need to represent use case for business id)
 API_KEY = os.getenv("API_KEY")
+```
 
 
 # How to Deploy `eka-webhook` Python Lambda in an AWS Environment
@@ -65,23 +66,17 @@ API_KEY = os.getenv("API_KEY")
 
 ## Step-by-Step Setup
 
-1. **Configure AWS Credentials**
+1. **Fork this Project and git clone it**
+2. **Configure AWS Credentials**
 
    ```bash
    aws configure
    ```
    or export your AWS credentials if you are using IAM Identity Center
-2. **Download and Extract the Project**
-
-   ```bash
-   curl -OL https://sdk-archives.eka.care/ekapython-webhook-sdk/v1/eka-webhook-deployment.zip
-   unzip eka-webhook-deployment.zip && cd eka-webhook-deployment
-   ```
 
 3. **Configure Environment Variables**
 
-   Edit the `config.env` file with the necessary configuration values. For more detailed configuration setup, refer to [detailed.md](./webhook-deployment/detailed.md).
-
+   Edit the `config.env` file with the necessary configuration values. For more detailed configuration setup, refer to [detailed.md](./detailed.md).
    ```bash
    vim config.env
    ```
@@ -97,7 +92,7 @@ API_KEY = os.getenv("API_KEY")
 - **To Deploy:**
 
   ```bash
-  ./deploy.sh deploy
+  ./deploy.sh deploy --version <version-tag>
   ```
 
 - **To Delete:**
@@ -109,7 +104,7 @@ API_KEY = os.getenv("API_KEY")
 - **To Upgrade:**
 
   ```bash
-  ./deploy.sh upgrade
+  ./deploy.sh upgrade --version <version-tag>
   ```
 
 - **help:**
