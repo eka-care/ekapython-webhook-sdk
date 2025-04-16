@@ -10,19 +10,34 @@ export AWS_PAGER=""
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 [deploy|delete]"
-    echo "Deploy or delete CloudFormation stack for the Eka webhook"
+    echo "Usage: $0 [deploy|upgrade|delete|register-webhook]"
+    echo "Deploy, upgrade, delete CloudFormation stack, or register webhook for the Eka webhook"
     echo ""
     echo "  deploy                    Deploy the CloudFormation stack (default)"
+    echo "  upgrade                   Update only the Lambda function with a new Docker image"
     echo "  delete                    Delete the CloudFormation stack"
+    echo "  register-webhook          Register the webhook with Eka API (without deployment)"
     echo "  -h, --help                Display this help message"
     echo ""
+}
+
+# Add this function at the beginning of the script, after the usage function
+detect_architecture() {
+    # Get the host machine architecture
+    local HOST_ARCH=$(uname -m)
+    
+    # Map host architecture to Lambda architecture
+    if [[ "$HOST_ARCH" == "arm64" || "$HOST_ARCH" == "aarch64" ]]; then
+        echo "arm64"
+    else
+        echo "x86_64"
+    fi
 }
 
 # Check for command as first argument
 ACTION="deploy"  # Default action
 if [[ $# -gt 0 ]]; then
-    if [[ "$1" == "deploy" || "$1" == "delete" ]]; then
+    if [[ "$1" == "deploy" || "$1" == "upgrade" || "$1" == "delete" || "$1" == "register-webhook" ]]; then
         ACTION="$1"
         shift
     elif [[ "$1" == "-h" || "$1" == "--help" ]]; then
@@ -51,6 +66,12 @@ else
     echo "EXTERNAL_URL=https://eka-webhook.example.com"
     echo "CERTIFICATE_ARN=arn:aws:acm:ap-south-1:123456789012:certificate/abcd1234-5678-90ef-ghij-klmnopqrstuv"
     exit 1
+fi
+
+# Auto-detect Lambda architecture if not specified
+if [[ -z "$LAMBDA_ARCHITECTURE" ]]; then
+    LAMBDA_ARCHITECTURE=$(detect_architecture)
+    echo "Auto-detected Lambda architecture: $LAMBDA_ARCHITECTURE"
 fi
 
 # Set resource names based on stack name
@@ -262,6 +283,10 @@ generate_parameters() {
   {
     "ParameterKey": "LambdaName",
     "ParameterValue": "${LAMBDA_NAME}"
+  },
+  {
+    "ParameterKey": "LambdaArchitecture",
+    "ParameterValue": "${LAMBDA_ARCHITECTURE:-x86_64}"
   }
 ]
 EOF
@@ -369,6 +394,96 @@ delete_stack() {
     echo "Stack deletion complete."
 }
 
+# Function to upgrade Lambda function
+upgrade_lambda() {
+    echo "Starting Lambda upgrade process..."
+    
+    # Validate Docker image version is provided
+    if [ -z "$DOCKER_IMAGE_VERSION" ]; then
+        echo "Error: DOCKER_IMAGE_VERSION must be set in config.env"
+        exit 1
+    fi
+    
+    echo "Using Docker image version: $DOCKER_IMAGE_VERSION"
+    
+    # Set up ECR and deploy the new image
+    setup_ecr_and_deploy_image
+    
+    # Get current stack parameters
+    echo "Retrieving current stack parameters..."
+    CURRENT_PARAMS=$(aws cloudformation describe-stacks \
+        --stack-name $STACK_NAME \
+        --region $REGION \
+        --query "Stacks[0].Parameters" \
+        --output json \
+        --no-cli-pager)
+    
+    if [[ -z "$CURRENT_PARAMS" || "$CURRENT_PARAMS" == "null" ]]; then
+        echo "Error: Could not retrieve current stack parameters."
+        exit 1
+    fi
+    
+    # Generate parameters file for update
+    echo "Generating parameters for stack update..."
+    PARAMS_FILE="parameters-upgrade.json"
+    
+    # Extract current parameter values and update only the DockerImage parameter
+    echo "[" > $PARAMS_FILE
+    echo "$CURRENT_PARAMS" | jq -c '.[]' | while read -r param; do
+        PARAM_KEY=$(echo $param | jq -r '.ParameterKey')
+        PARAM_VALUE=$(echo $param | jq -r '.ParameterValue')
+        
+        if [[ "$PARAM_KEY" == "DockerImage" ]]; then
+            # Update the Docker image parameter
+            echo "  {" >> $PARAMS_FILE
+            echo "    \"ParameterKey\": \"$PARAM_KEY\"," >> $PARAMS_FILE
+            echo "    \"ParameterValue\": \"$ECR_REPO_URL\"" >> $PARAMS_FILE
+            echo "  }," >> $PARAMS_FILE
+        elif [[ "$PARAM_KEY" == "LambdaArchitecture" ]]; then
+            # Update Lambda architecture with the detected or specified value
+            echo "  {" >> $PARAMS_FILE
+            echo "    \"ParameterKey\": \"$PARAM_KEY\"," >> $PARAMS_FILE
+            echo "    \"ParameterValue\": \"$LAMBDA_ARCHITECTURE\"" >> $PARAMS_FILE
+            echo "  }," >> $PARAMS_FILE
+        else
+            # Keep other parameters unchanged
+            echo "  {" >> $PARAMS_FILE
+            echo "    \"ParameterKey\": \"$PARAM_KEY\"," >> $PARAMS_FILE
+            echo "    \"ParameterValue\": \"$PARAM_VALUE\"" >> $PARAMS_FILE
+            echo "  }," >> $PARAMS_FILE
+        fi
+    done
+    
+    # Remove trailing comma from the last entry and close JSON array
+    sed -i '' -e '$ s/,$//' $PARAMS_FILE
+    echo "]" >> $PARAMS_FILE
+    
+    # Update the CloudFormation stack with the new parameters
+    echo "Updating stack '$STACK_NAME' with new Docker image..."
+    aws cloudformation update-stack \
+        --stack-name $STACK_NAME \
+        --template-body file://$TEMPLATE_FILE \
+        --region $REGION \
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+        --parameters file://$PARAMS_FILE \
+        --no-cli-pager
+    
+    # Wait for the update to complete
+    echo "Waiting for stack update to complete..."
+    aws cloudformation wait stack-update-complete \
+        --stack-name $STACK_NAME \
+        --region $REGION
+    
+    # Check if the update was successful
+    if [ $? -ne 0 ]; then
+        echo "Error: CloudFormation stack update failed."
+        exit 1
+    fi
+    
+    echo "Lambda function upgraded successfully with Docker image version $DOCKER_IMAGE_VERSION."
+    get_stack_outputs
+}
+
 register_webhook(){
     # Register the webhook with the specified URL
     echo "Getting Auth Token"
@@ -400,7 +515,9 @@ register_webhook(){
 
     echo "Registering webhook with URL: $EXTERNAL_URL"
 
-    RESPONSE=$(curl --silent --write-out "%{http_code}" --request POST \
+    # Store HTTP status code and response body separately
+    HTTP_STATUS=$(curl --silent --output response.txt --write-out "%{http_code}" \
+        --request POST \
         --url https://api.eka.care/notification/v1/connect/webhook/subscriptions \
         --header "Authorization: Bearer ${AUTH_TOKEN}" \
         --header 'Content-Type: application/json' \
@@ -416,12 +533,13 @@ register_webhook(){
         \"protocol\": \"https\"
         }")
     
-    # Check the HTTP status code
-    HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-    RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
+    RESPONSE_BODY=$(cat response.txt)
+    rm -f response.txt  # Clean up temporary file
     
+    # Check the HTTP status code
     if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 300 ]]; then
         echo "Webhook registered successfully! (HTTP $HTTP_STATUS)"
+        echo "Response: $RESPONSE_BODY"
         return 0
     else
         echo "Failed to register webhook. HTTP Status: $HTTP_STATUS"
@@ -439,11 +557,30 @@ case $ACTION in
         echo "Deployment completed successfully!"
         register_webhook
         ;;
+    upgrade)
+        # Only update the Lambda function with a new Docker image
+        upgrade_lambda
+        ;;
     delete)
         delete_stack
         ;;
+    register-webhook)
+        # Only register the webhook with Eka API
+        echo "Registering webhook only..."
+        if [ -z "$EXTERNAL_URL" ]; then
+            echo "Error: EXTERNAL_URL must be set in config.env"
+            exit 1
+        fi
+        register_webhook
+        if [ $? -eq 0 ]; then
+            echo "Webhook registration successful!"
+        else
+            echo "Webhook registration failed!"
+            exit 1
+        fi
+        ;;
     *)
-        echo "Error: Invalid action '$ACTION'. Use 'deploy' or 'delete'."
+        echo "Error: Invalid action '$ACTION'. Use 'deploy', 'upgrade', 'delete', or 'register-webhook'."
         usage
         exit 1
         ;;

@@ -104,6 +104,14 @@ Parameters:
     Description: The ARN of the ACM certificate for the custom domain
     Default: arn:aws:acm:us-east-1:123456789012:certificate/abcd1234-5678-90ef-ghij-klmnopqrstuv
 
+  LambdaArchitecture:
+    Type: String
+    Description: The architecture for the Lambda function (arm64 or x86_64)
+    Default: x86_64
+    AllowedValues:
+      - arm64
+      - x86_64
+
 Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -125,6 +133,8 @@ Resources:
       PackageType: Image
       Code:
         ImageUri: !Ref DockerImage
+      Architectures:
+        - !Ref LambdaArchitecture
       Timeout: 30
       MemorySize: 512
       Environment:

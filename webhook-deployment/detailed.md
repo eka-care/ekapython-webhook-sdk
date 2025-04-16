@@ -1,53 +1,45 @@
-# Configuration Options Documentation for Eka Webhook Deployment
+# EkaPython Webhook Deployment Guide
 
-## Overview
+This repository contains tools to deploy the EkaPython Webhook service to AWS using CloudFormation. This guide explains the configuration parameters needed for successful deployment.
 
-This documentation covers all configuration options used in the Eka webhook deployment process as defined in `config.env`. These settings are used by the deployment script and CloudFormation template to provision and configure required AWS resources.
+## Configuration Parameters
 
-## Stack Configuration
+The deployment script uses the following parameters, which should be customized according to your environment:
 
-| Parameter | Description | Service |
-|-----------|-------------|---------|
-| `STACK_NAME` | Name of the CloudFormation stack to be created or updated | AWS CloudFormation |
-| `TEMPLATE_FILE` | Path to the CloudFormation template file | AWS CloudFormation |
-| `REGION` | AWS region where resources will be deployed | All AWS services |
+### Stack Configuration
 
-## Docker Image Configuration
+- **STACK_NAME**: The name of your CloudFormation stack
+- **TEMPLATE_FILE**: CloudFormation template file path
+- **REGION**: AWS region where the stack will be deployed
 
-| Parameter | Description | Service |
-|-----------|-------------|---------|
-| `DOCKER_IMAGE_VERSION` | Version tag of the Docker image to pull from DockerHub | Docker, ECR | You can get the latest version at https://github.com/eka-care/ekapython-webhook-sdk/releases
-| `AWS_ACCOUNT_ID` | AWS account ID for constructing ECR repository URL | ECR |
-| `ECR_REPO_NAME` | Name of the ECR repository to store Lambda container image | ECR |
+### Docker Image Configuration
 
-## API Gateway Configuration
+- **DOCKER_IMAGE_VERSION**: Version tag of the Docker image to deploy
+  - Update this value when deploying a new version of the webhook service which can be found here: https://hub.docker.com/repository/docker/ekacare/ekapython-webhook-sdk/general
 
-| Parameter | Description | Service |
-|-----------|-------------|---------|
-| `API_GW_NAME` | Name for the API Gateway instance | API Gateway |
-| `STAGE_NAME` | Deployment stage name for API Gateway (e.g., prod, dev) | API Gateway |
+### CloudFormation Parameters
 
-## Custom Domain Configuration
+- **STAGE_NAME**: Deployment environment (e.g., dev, prod)
+- **EXTERNAL_URL**: Public URL where the webhook will be accessible
+- **CERTIFICATE_ARN**: ARN of the SSL certificate in AWS Certificate Manager for HTTPS
 
-| Parameter | Description | Service |
-|-----------|-------------|---------|
-| `EXTERNAL_URL` | External URL that will be used as the custom domain | API Gateway, Route 53 |
-| `HOSTED_ZONE_ID` | ID of the Route 53 hosted zone for DNS configuration | Route 53 |
-| `CERTIFICATE_ARN` | ARN of the ACM certificate for HTTPS on the custom domain | ACM, API Gateway |
+### API Registration Details
 
-## Lambda Configuration
+- **CLIENT_ID**: Your client ID for authentication (required in all cases)
+- **CLIENT_SECRET**: Your client secret for authentication (required in all cases)
+- **SIGNING_KEY**: 
+  - **Required** when `IS_SIGNING_KEY_IMPLEMENTED` is set to `True` in `constants.py`
+  - Used for verifying webhook signatures
+- **API_KEY**: 
+  - **Required** for business use cases
+  - Used for making authorized API calls to the EkaCare services
 
-| Parameter | Description | Service |
-|-----------|-------------|---------|
-| `LAMBDA_NAME` | Name for the Lambda function that will process webhook requests | Lambda |
+## Deployment Instructions
 
-## AWS Services Used
-
-- **AWS CloudFormation**: Infrastructure as code service for stack management
-- **Amazon ECR**: Container registry for storing webhook Lambda container images
-- **AWS Lambda**: Serverless compute service for webhook request processing
-- **Amazon API Gateway**: API management service for creating REST endpoints
-- **Amazon Route 53**: DNS service for custom domain configuration
-- **AWS Certificate Manager (ACM)**: Certificate service for HTTPS configuration
-
-The deployment workflow pulls a Docker image from DockerHub, pushes it to ECR, then uses CloudFormation to provision and configure all the required AWS resources according to these configuration parameters.
+1. Clone this repository
+2. Copy the configuration template to a `.env` file
+3. Update all placeholder values with your actual configuration
+4. Run the deployment script:
+   ```bash
+   cd webhook-deployment
+   ./deploy.sh
