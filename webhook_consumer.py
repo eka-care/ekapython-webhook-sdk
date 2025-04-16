@@ -78,7 +78,6 @@ class WebhookConsumer:
 
         Args:
             data (dict): The data received from the webhook.
-            :param body:
             :param client_id:
             :param api_key:
             :param client_secret:
@@ -97,41 +96,8 @@ class WebhookConsumer:
             )
 
         if self.payload.get("event") in ALLOWED_PAYLOADS:
-
-            # Get data from appointment payload
-            appointment_id = self.payload.get("data", {}).get("appointment_id")
-            patient_id = self.payload.get("data", {}).get("patient_id")
-            clinic_id = self.payload.get("data", {}).get("clinic_id")
-            doctor_id = self.payload.get("data", {}).get("doctor_id")
-
-            if not appointment_id:
-                logger.error("Missing appointment_id in payload")
-                return {"error": "Missing appointment_id in payload"}
-            if not patient_id:
-                logger.error("Missing patient_id in payload")
-                return {"error": "Missing patient_id in payload"}
-            if not clinic_id:
-                logger.error("Missing clinic_id in payload")
-                return {"error": "Missing clinic_id in payload"}
-            if not doctor_id:
-                logger.error("Missing doctor_id in payload")
-                return {"error": "Missing doctor_id in payload"}
-
-
-            logger.debug(f"Webhook data for appointment {self.payload}:")
-            appointment_details = client.appointments.get_appointment_details(
-                appointment_id)
-            appointment_details["rescheduled"] = False
-            old_aid = self.payload.get("data", {}).get("p_aid")
-            if old_aid and isinstance(old_aid, str):
-                appointment_details["rescheduled"] = True
-                appointment_details["old_appointment_details"] = client.appointments.get_appointment_details(
-                    old_aid)
-            return_payload = {"appointment_details": appointment_details, "patient_details": client.patient.get_patient(patient_id),
-                              "clinic_details": client.clinic_doctor.get_clinic_details(clinic_id),
-                              "doctor_details": client.clinic_doctor.get_doctor_details(doctor_id)}
+            return_payload = client.appointment_webhook.get_detailed_appointment_data(self.payload)
             return {"error": "", "data": json.dumps(return_payload)}
-
         else:
             return {"error": "payload not supported, allowed payloads are " + str(ALLOWED_PAYLOADS)}
 
