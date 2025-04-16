@@ -123,16 +123,13 @@ class WebhookConsumer:
                 appointment_id)
             appointment_details["rescheduled"] = False
             old_aid = self.payload.get("data", {}).get("p_aid")
-            old_appointment_details = None
             if old_aid and isinstance(old_aid, str):
                 appointment_details["rescheduled"] = True
-                old_appointment_details = client.appointments.get_appointment_details(
+                appointment_details["old_appointment_details"] = client.appointments.get_appointment_details(
                     old_aid)
             return_payload = {"appointment_details": appointment_details, "patient_details": client.patient.get_patient(patient_id),
                               "clinic_details": client.clinic_doctor.get_clinic_details(clinic_id),
                               "doctor_details": client.clinic_doctor.get_doctor_details(doctor_id)}
-            if old_appointment_details:
-                return_payload["old_appointment_details"] = old_appointment_details
             return {"error": "", "data": json.dumps(return_payload)}
 
         else:
