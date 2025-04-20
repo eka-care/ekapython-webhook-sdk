@@ -97,6 +97,10 @@ class WebhookConsumer:
 
         if self.payload.get("event") in ALLOWED_PAYLOADS:
             return_payload = client.appointment_webhook.get_detailed_appointment_data(self.payload)
+            
+            # Further logic after getting complete payload ...
+            # Write your logic after receiving the payload ...
+            
             return {"error": "", "data": json.dumps(return_payload)}
         else:
             return {"error": "payload not supported, allowed payloads are " + str(ALLOWED_PAYLOADS)}
