@@ -112,7 +112,35 @@ Parameters:
       - arm64
       - x86_64
 
+  VpcId:
+    Type: String
+    Description: The VPC ID for Lambda function
+    
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: The Subnet IDs for Lambda function (comma-delimited)
+    
+  SecurityGroupId:
+    Type: String
+    Description: The Security Group ID for Lambda function (optional)
+    Default: ""
+
 Resources:
+  # Create a Security Group if none provided
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateSecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda function in VPC
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-lambda-sg"
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -125,6 +153,8 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        
   WebhookLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -137,6 +167,10 @@ Resources:
         - !Ref LambdaArchitecture
       Timeout: 30
       MemorySize: 512
+      VpcConfig:
+        SecurityGroupIds:
+          - !If [CreateSecurityGroup, !Ref LambdaSecurityGroup, !Ref SecurityGroupId]
+        SubnetIds: !Ref SubnetIds
       Environment:
         Variables:
           EXTERNAL_URL: !Ref ExternalUrl
@@ -252,3 +286,6 @@ Outputs:
   DNSRecord:
     Description: "DNS Record for the custom domain"
     Value: !Ref DNSRecord
+
+Conditions:
+  CreateSecurityGroup: !Equals [!Ref SecurityGroupId, ""]

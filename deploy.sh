@@ -90,6 +90,9 @@ else
     echo "STAGE_NAME=prod"
     echo "EXTERNAL_URL=https://eka-webhook.example.com"
     echo "CERTIFICATE_ARN=arn:aws:acm:ap-south-1:123456789012:certificate/abcd1234-5678-90ef-ghij-klmnopqrstuv"
+    echo "VPC_ID=vpc-12345678"
+    echo "SUBNET_IDS=subnet-12345678,subnet-87654321"
+    echo "SECURITY_GROUP_ID=sg-12345678 # Optional - will be created if not specified"
     exit 1
 fi
 
@@ -249,7 +252,7 @@ generate_parameters() {
     PARAMS_FILE="parameters.json"
     
     # Verify all required parameters are set
-    local REQUIRED_PARAMS=(STAGE_NAME EXTERNAL_URL CERTIFICATE_ARN CLIENT_ID CLIENT_SECRET API_KEY SIGNING_KEY)
+    local REQUIRED_PARAMS=(STAGE_NAME EXTERNAL_URL CERTIFICATE_ARN CLIENT_ID CLIENT_SECRET API_KEY SIGNING_KEY VPC_ID SUBNET_IDS)
     local MISSING_PARAMS=0
     
     for PARAM in "${REQUIRED_PARAMS[@]}"; do
@@ -323,6 +326,18 @@ generate_parameters() {
   {
     "ParameterKey": "LambdaArchitecture",
     "ParameterValue": "${LAMBDA_ARCHITECTURE:-x86_64}"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "${VPC_ID}"
+  },
+  {
+    "ParameterKey": "SubnetIds",
+    "ParameterValue": "${SUBNET_IDS}"
+  },
+  {
+    "ParameterKey": "SecurityGroupId",
+    "ParameterValue": "${SECURITY_GROUP_ID:-}"
   }
 ]
 EOF
