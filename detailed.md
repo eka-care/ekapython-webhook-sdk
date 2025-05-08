@@ -23,6 +23,12 @@ The deployment script uses the following parameters, which should be customized 
 - **EXTERNAL_URL**: Public URL where the webhook will be accessible
 - **CERTIFICATE_ARN**: ARN of the SSL certificate in AWS Certificate Manager for HTTPS
 
+### VPC Configuration
+
+- **VPC_ID**: The ID of the VPC where the service will be deployed (Required)
+- **SUBNET_IDS**: A comma-separated list of subnet IDs within the specified VPC (Required)
+- **SECURITY_GROUP_ID**: The ID of an existing security group to associate with the service. If left blank, a new security group will be created (Optional)
+
 ### API Registration Details
 
 - **CLIENT_ID**: Your client ID for authentication (required in all cases)
@@ -43,3 +49,4 @@ The deployment script uses the following parameters, which should be customized 
    ```bash
    cd webhook-deployment
    ./deploy.sh
+```

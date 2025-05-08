@@ -63,6 +63,14 @@ API_KEY = os.getenv("API_KEY")
 - `Docker` installed and running
 - `AWS Credentials` and necessary Permissions to deploy the required Resources. (API GW, Cloudformation, Lambda, ECR) via CloudFormation
 
+## The Script will create the following Resources in AWS
+- ECR
+- Lambda Function using Docker Image
+- API Gateway
+- Custom Domain Name
+- Route 53 Entry
+- IAM Role
+- Security Group (Optional)
 
 ## Step-by-Step Setup
 
